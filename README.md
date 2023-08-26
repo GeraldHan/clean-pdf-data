@@ -2,12 +2,12 @@
 读取多层级目录下的pdf文件，通常是爬虫爬下来的，将其中摘要和正文抽取出来。可以初步结构化pdf，快速抽取，并且简单清洗数据，得到想要的文本内容，得到（1）摘要（2）正文
 使用了python 多进程加速程序，适用大规模pdf抽取。 
 
-results文件中,是dict 的list.键值包括文件名，摘要，还有按。和换行断句的正文。
+results文件中,是dict 的list.键值包括文件名，摘要，还有按`。`和`\n`断句的正文。
 
 outputs文件夹中是清洗后按照段落的txt。
 
 #### 每个dict:
- {"pdf_name":pdf全局path, "whole_content": 所有内容文本, "abstract":abstract, "content_split_list":断句结果}
+ {"pdf_name":pdf全局path, "abstract":abstract, "content_split_list":断句结果}
 
 ## 用法
 
