@@ -20,7 +20,7 @@ python main.py --lang chinese --pdf_dir_pth ./test_pdf --result_json_file ./reul
 
 1. Acrobat的``动作向导``功能，添加去除水印，删除页眉页脚，另存为txt，即可批量处理整个文件夹中的pdf文件。
 2. 如果质量很差，可以先将pdf批量转为word可以识别文字（大概用了OCR），然后从word转txt（Office的批量需要代码写宏，可以通过adobe将word批量转pdf再从转后的pdf进行步骤1）
-3. 将txt文件另存为另一个文件夹进行初步清洗
+3. 将txt文件另存为另一个文件夹进行初步清洗（脚本search_file.py可以对任意深度文件夹相同类型文件进行另存）
 清洗txt
 ```Python3、
 python main.py --lang txt --pdf_dir_pth ./test_txt --result_json_file ./reult.json --num 40
