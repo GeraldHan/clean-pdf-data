@@ -4,10 +4,25 @@ import tqdm
 import multiprocessing
 import time
 from re import sub, split
-# process zhiwang_download 
-# extract abstract of every pdf 
-# Also, find some wrong pdf file
-# fengly: 2022/4/28/ 15
+import re
+from test import analyse_font
+ 
+delete_starts = ("·", "*", "图", "表", "Fig", "收稿日期", "引用格式", "0")
+
+
+
+def contains_chinese(input_str):
+    pattern = re.compile(r'[\u4e00-\u9fa5]')
+    match = re.search(pattern, input_str)
+    if match:
+        return True
+    else:
+        return False
+
+def starts_with_symbol(input_str):
+    pattern = r'^[^A-Za-z0-9\s\u4e00-\u9fa5]'
+    match = re.match(pattern, input_str)
+    return bool(match)
 
 class Process:
     def __init__(self, pool_num=40):
@@ -33,6 +48,7 @@ class Process:
         abstract = ""
         page_content = ""
         end_bool = 0
+        font_list = []
         for idx, page in enumerate(doc):
             if end_bool==1:
                 break 
@@ -40,10 +56,11 @@ class Process:
             page_text =[i[-3:] for i in page1text if i[-1]==0]
             page_text.sort(key=lambda x:x[1])
             page_text_clean =[self.clean_sentence(j[0]) for j in page_text]
+            # print(page_text_clean)
             
             for idx,line in enumerate(page_text_clean):
-                ""
-                if "摘要" in line or "提要" in line:
+                # if "摘要" in line or "提要" in line:
+                if re.search(r"摘.*要", line) or re.search(r"提.*要", line):
                     content_location_bool=1
                 ##########################
                 # filter special line
@@ -53,11 +70,14 @@ class Process:
                         continue
                 if "文献标识码" in line or "中图分类号" in line:
                     continue
+                if re.search(r"第.*期", line) or re.search(r"第.*卷", line):
+                    continue
+                if "doi" in line:
+                    continue
                 #############################################
                 if ("参考资料" in line) or ("参考文献" in line) or ("References" in line):
                     end_bool=1
                     break
-                    
                 if content_location_bool==1:
                     abstract+=line.strip()
                 if content_location_bool==2:# skip english abstract
@@ -68,6 +88,7 @@ class Process:
                             content_location_bool=3
                     except: 
                         pass
+
                 if "Keywords" in line or "Key words" in line: # 中文摘要　开始信息缺失
                     content_location_bool=2
                     page_content = "" 
@@ -76,7 +97,10 @@ class Process:
                     continue
                 
                 if content_location_bool==3:
-                        page_content+=line.strip()
+                    page_content+=line.strip()
+            
+            font_list += analyse_font(page)
+
         if len(page_content.strip()) == 0:
            page_content = "".join(page_content)
 
@@ -89,7 +113,85 @@ class Process:
         dic_result["whole_content"] = result_str2
         split_list = split("[；。]", result_str2)
         dic_result["content_split_list"] = [i for i in split_list if i!=""]
+        dic_result["font_split_list"] = font_list
+    
         return dic_result
+    
+    def clean_txt(self, file_name):
+        content_location_bool = 0
+        abstract = ""
+        page_content = ""
+        end_bool = 0
+        dic_result={}
+        try:
+            with open(file_name, 'r', encoding='gbk') as file:
+                for line in file:
+                    if re.search(r"摘.*要", line) or re.search(r"提.*要", line):
+                        content_location_bool=1
+                    ##########################
+                    # filter special line
+                    if "关键词" in line: # 舍掉关键词
+                        # in case that "关键词" is not used in some passages
+                        if line.startswith('关键词'):
+                            continue
+                        else:
+                            line_split = line.split('关键词')
+                            abstract+=line_split[0].strip()
+                            line = line_split[-1]
+                            content_location_bool = 2
+                            continue
+                    if "中图分类号" in line:
+                        content_location_bool = 2
+                        continue
+                    if line.startswith(delete_starts):
+                        continue
+                    if 'doi' in line:
+                        continue
+                    if re.search(r"第.*期", line) or re.search(r"第.*卷", line):
+                        continue
+                    if starts_with_symbol(line):
+                        continue
+                    #############################################
+                    if ("参考资料" in line) or ("参考文献" in line) or ("References" in line):
+                        end_bool=1
+                        break
+                        
+                    if content_location_bool==1:
+                        abstract+=line.strip()
+                    
+                    if content_location_bool == 2: #跳过英文摘要
+                        if contains_chinese(line):
+                            content_location_bool = 3
+                        else:
+                            continue
+
+                    if content_location_bool==3 or content_location_bool==1:
+                        if contains_chinese(line):#跳过英文图题
+                            page_content+=line
+
+                if len(page_content.strip()) == 0:
+                    page_content = "".join(page_content)
+
+                # regex drop the expression like [4,5] [23, 1-15] [2,3-6,9]
+                result_str1 = sub("\[[0-9]*-*~*,*[0-9]*-*[0-9]*(,[0-9]*)*\]","",page_content)
+                result_str2 = sub("［[0-9]*－*[0-9]*］","",result_str1)
+                result_str3 = sub("\n","",result_str2)
+                
+                output_name = './outputs/' + file_name.split('/')[-1]
+                with open(output_name, 'w') as outputs:
+                    outputs.write(result_str2)
+                outputs.close()  
+
+            
+                dic_result["abstract"] = abstract
+                dic_result["pdf_name"] = file_name
+                split_list = split("[。\n]", result_str3)
+                dic_result["content_split_list"] = [i for i in split_list if i not in ["", " "]]
+        except:
+            print(file_name)
+    
+        return dic_result
+                
                         
     def extract_abstract_from_pdf_en(self, file_name):
         "extract_english_content from pdf"
@@ -133,7 +235,8 @@ class Process:
                     abstract+=line.strip()
                 
                 if content_location_bool==2:
-                        page_content+=line.strip()
+                    page_content+=line.strip()
+        
         if len(page_content.strip()) == 0:
            page_content = "".join(page_content)
 
@@ -189,6 +292,8 @@ class Process:
                     except:
                         print(i)
         print("save successful as ", save_pth)
+
+    
 
 if __name__ =="__main__":
     # 
